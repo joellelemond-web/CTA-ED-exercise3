@@ -1,7 +1,7 @@
 ---
 title: "Computational Text Analysis - Exercise 3: Comparison and complexity"
-author: "[your name here]"
-date: "25/02/2026"
+author: "Joelle Galatan"
+date: "03/04/2026"
 output: html_document
 ---
 
@@ -25,6 +25,9 @@ library(kableExtra)
 ```
 
 ```{r, message=F}
+
+pacman::p_load(readr, quanteda, quanteda.textstats, stringdist, dplyr, tibble, ggplot2)
+
 library(readr) # more informative and easy way to import data
 library(quanteda) # includes functions to implement Lexicoder
 library(quanteda.textstats) # for estimating similarity and complexity measures
@@ -294,6 +297,116 @@ ggplot(sum_corpus, aes(x=speaker, y=mean)) +
 
 ## Exercises
 
-1. Compute distance measures such as "euclidean" or "manhattan" for the MP tweets as above, comparing between tweets by MPs and tweets by PM, Theresa May. 
+1. Compute distance measures such as "euclidean" or "manhattan" for the MP tweets as above, comparing between tweets by MPs and tweets by PM, Theresa May.
+```{r}
+#calculate the euclidean distance matrix by username
+euclidean_d<- dfmat %>%
+  dfm_group(groups = username) %>%
+  textstat_dist(margin = "documents", method = "euclidean") #specify method here as character object
+head(euclidean_d)
+#convert to a matrix
+euclidean_matrix<-as.matrix(euclidean_d)
+#Theresa May is row 23
+#generate data frame keeping only the row for Theresa May
+euclideandf <- as.data.frame(euclidean_matrix[23, c(1:22, 24)])
+#change column name
+colnames(euclideandf) <- "euclidean_dist_may"
+#add username label]
+euclideandf<- tibble::rownames_to_column(euclideandf, "username")
+
+
+#calculate Manhattan distance
+manhattan_d <-dfmat %>%
+  dfm_group(groups = username)%>%
+  textstat_dist(margin = "documents", method="manhattan")
+head(manhattan_d)
+#convert to a matrix
+manhattan_matrix <-as.matrix(manhattan_d)
+head(manhattan_matrix)
+#Theresa May is row 23
+#generate data frame keeping only the row for Theresa May and deleting the Theresa May x Theresa May entry
+manhattan_df <- as.data.frame(manhattan_matrix[23, c(1:22, 24)])
+
+#change column name
+colnames(manhattan_df) <-"manhattan_dist_may"
+#add username label
+manhattan_df<- tibble::rownames_to_column(manhattan_df, "username")
+
+
+
+
+
+```
 2. Estimate at least three other complexity measures for the EU speeches as above. Consider how the results compare to the Flesch-Kincaid measure used in the article by @schoonvelde_liberals_2019.
+```{r}
+#The Gunning Fog Index estimates the years of formal education needed to understand the text, focuses on sentence legnth and the percentage of complex words
+speeches$gunning_fog <-textstat_readability(speeches$text, measure = "FOG")
+head(speeches$gunning_fog)
+#get mean and standard deviation of Gunning-Fog, and N of speeches for each speaker
+sum_corpus_gf <- speeches %>%
+  group_by(speaker) %>%
+  summarise(mean = mean(gunning_fog$FOG, na.rm=TRUE),
+                   SD=sd(gunning_fog$FOG, na.rm=TRUE),
+                   N=length(speaker))
+
+# calculate standard errors and confidence intervals
+sum_corpus_gf$se <- sum_corpus_gf$SD / sqrt(sum_corpus_gf$N)
+sum_corpus_gf$min <- sum_corpus_gf$mean - 1.96*sum_corpus_gf$se
+sum_corpus_gf$max <- sum_corpus_gf$mean + 1.96*sum_corpus_gf$se
+
+
+#The Dale-Chall formula uses a list of 3,000 familiar words to determine reading difficulty. Lower scores highlight higher readabilities
+speeches$dalechall <-textstat_readability(speeches$text, measure = "Dale.Chall")
+sum_corpus_dc <- speeches %>%
+  group_by(speaker) %>%
+  summarise(mean = mean(dalechall$Dale.Chall, na.rm=TRUE),
+                   SD=sd(dalechall$Dale.Chall, na.rm=TRUE),
+                   N=length(speaker))
+
+# calculate standard errors and confidence intervals
+sum_corpus_dc$se <- sum_corpus_dc$SD / sqrt(sum_corpus_dc$N)
+sum_corpus_dc$min <- sum_corpus_dc$mean - 1.96*sum_corpus_dc$se
+sum_corpus_dc$max <- sum_corpus_dc$mean + 1.96*sum_corpus_dc$se
+
+
+#Coleman-Liau Index: Uses letters instead of syllables to calculate grade level, which makes it easier for computerized calculations.
+
+speeches$colemanliau <-textstat_readability(speeches$text, measure = "Coleman.Liau")
+sum_corpus_cl <- speeches %>%
+  group_by(speaker) %>%
+  summarise(mean = mean(colemanliau$Coleman.Liau, na.rm=TRUE),
+                   SD=sd(colemanliau$Coleman.Liau, na.rm=TRUE),
+                   N=length(speaker))
+
+# calculate standard errors and confidence intervals
+sum_corpus_cl$se <- sum_corpus_cl$SD / sqrt(sum_corpus_cl$N)
+sum_corpus_cl$min <- sum_corpus_cl$mean - 1.96*sum_corpus_cl$se
+sum_corpus_cl$max <- sum_corpus_cl$mean + 1.96*sum_corpus_cl$se
+
+#evaluate the results graphically
+#combine into one data frame
+sum_corpus$type    <- "Flesch-Kincaid"
+sum_corpus_cl$type <- "Coleman-Liau"
+sum_corpus_dc$type <- "Dale-Chall"
+sum_corpus_gf$type <- "Gunning-Fog"
+
+sum_combined <-bind_rows(sum_corpus, sum_corpus_cl, sum_corpus_dc, sum_corpus_gf)
+
+
+
+ggplot(sum_combined) +
+  aes(x = speaker, y = mean) +
+  geom_jitter(width = 0.2) +
+  facet_wrap(~ type) +
+  theme_minimal()
+
+#Flesh Kincaid and Gunning Fog spreads appear similar, but hard to tell based just off of visual displays. 
+
+
+```
+
+
+
+```
+
 3. (Advanced---optional) Estimate similarity scores between the MP tweets and the PM tweets for each week contained in the data. Plot the results. 
